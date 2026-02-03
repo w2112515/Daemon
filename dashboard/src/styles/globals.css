@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@theme {
+  /* Industrial Futurism Color Palette */
+  --color-background: #0A0A0B;
+  --color-card: #141417;
+  --color-primary: #F7931A;
+  /* Bitcoin Orange */
+  --color-secondary: #CCFF00;
+  /* Acid Lime */
+  --color-muted: #6B7280;
+  /* Technical Gray */
+  --color-border: #27272A;
+  /* Microlines */
+
+  /* Typography */
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* Border Radius - Industrial (minimal) */
+  --radius-sm: 2px;
+  --radius-md: 0;
+  --radius-lg: 0;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: #E4E4E7;
+    /* zinc-100 */
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}

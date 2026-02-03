@@ -1,0 +1,62 @@
+{
+    "name": "@daemon/l402-mcp",
+    "version": "0.1.0",
+    "description": "MCP L402 SDK - Pay-per-call middleware for Model Context Protocol servers",
+    "main": "./dist/index.js",
+    "module": "./dist/index.mjs",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "require": "./dist/index.js",
+            "import": "./dist/index.mjs",
+            "types": "./dist/index.d.ts"
+        }
+    },
+    "bin": {
+        "l402-mcp": "./dist/demo.js"
+    },
+    "files": [
+        "dist",
+        "src"
+    ],
+    "scripts": {
+        "build": "tsup src/index.ts src/demo.ts --format cjs,esm --dts --clean",
+        "typecheck": "tsc --noEmit",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "demo": "npx tsx src/demo.ts",
+        "prepublishOnly": "npm run build"
+    },
+    "keywords": [
+        "l402",
+        "mcp",
+        "model-context-protocol",
+        "lightning",
+        "bitcoin",
+        "api",
+        "authentication",
+        "middleware"
+    ],
+    "author": "Daemon Team",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/daemon/l402-mcp"
+    },
+    "homepage": "https://daemon.io/docs/sdk/mcp",
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.0.0",
+        "express": "^4.18.0"
+    },
+    "devDependencies": {
+        "@types/express": "^4.17.21",
+        "@types/node": "^20.10.0",
+        "tsup": "^8.0.0",
+        "tsx": "^4.7.0",
+        "typescript": "^5.3.0",
+        "vitest": "^1.2.0"
+    }
+}

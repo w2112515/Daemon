@@ -1,0 +1,13 @@
+# Agent Wallet Module - Python Dependencies
+
+pydantic>=2.0.0
+grpcio>=1.60.0
+grpcio-tools>=1.60.0
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+python-dotenv>=1.0.0
+httpx>=0.25.0
+
+# LND gRPC (optional, for real LND connection)
+# Install from: https://github.com/lightningnetwork/lnd/tree/master/lnrpc
+# lndgrpc>=0.5.0

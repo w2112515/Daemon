@@ -1,0 +1,24 @@
+{
+    "enabled": true,
+    "defaultDeny": true,
+    "entries": [
+        {
+            "agentId": "*",
+            "allowedServices": [
+                "/health",
+                "/api/health",
+                "/api/telemetry/*"
+            ],
+            "maxAmountPerCall": 0,
+            "enabled": true
+        },
+        {
+            "agentId": "dev-agent",
+            "allowedServices": [
+                "/api/*"
+            ],
+            "maxAmountPerCall": 100000,
+            "enabled": true
+        }
+    ]
+}

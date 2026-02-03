@@ -1,0 +1,49 @@
+{
+  "name": "@daemon/l402-client",
+  "version": "0.1.0",
+  "description": "TypeScript L402 HTTP Client - Pay-per-call API authentication",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "l402",
+    "lightning",
+    "bitcoin",
+    "api",
+    "authentication",
+    "http-client"
+  ],
+  "author": "Daemon Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daemon/l402-ts"
+  },
+  "homepage": "https://daemon.io/docs/sdk/typescript",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  }
+}

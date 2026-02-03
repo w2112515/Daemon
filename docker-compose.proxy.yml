@@ -1,0 +1,61 @@
+# L402 Proxy Docker Compose
+# @trace Vol.2 §2.5 S-P1-04
+# @constraint D-ECO-02
+
+services:
+  # L402 Proxy Service
+  l402-proxy:
+    build:
+      context: ./proxy
+      dockerfile: Dockerfile
+    container_name: l402-proxy
+    ports:
+      - "8402:8402"
+    environment:
+      - UPSTREAM_URL=${UPSTREAM_URL:-https://jsonplaceholder.typicode.com}
+      - PORT=8402
+      - PRICE_PER_REQUEST=${PRICE_PER_REQUEST:-1000}
+      - PRICE_MEMO=${PRICE_MEMO:-L402 Proxy API Call}
+      - LND_MODE=${LND_MODE:-mock}
+      - LND_REST_URL=${LND_REST_URL:-}
+      - LND_MACAROON=${LND_MACAROON:-}
+      - SKIP_PATHS=/health,/info
+    networks:
+      - l402-network
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8402/health" ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+    depends_on:
+      lnd:
+        condition: service_healthy
+
+  # LND Node (from main compose)
+  lnd:
+    image: lightninglabs/lnd:v0.17.0-beta
+    container_name: l402-lnd
+    volumes:
+      - lnd-data:/root/.lnd
+    environment:
+      - NETWORK=signet
+    ports:
+      - "10009:10009" # gRPC
+      - "8080:8080" # REST
+    networks:
+      - l402-network
+    healthcheck:
+      test: [ "CMD", "lncli", "--network=signet", "getinfo" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+networks:
+  l402-network:
+    driver: bridge
+
+volumes:
+  lnd-data:
+    driver: local

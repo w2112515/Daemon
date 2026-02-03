@@ -1,0 +1,189 @@
+version: "3.9"
+
+# ============================================================
+# Daemon L402 - AI Payment Agent Development Environment
+# 来源: Vol.0 §1-4, Vol.2 S-P0-01
+# ============================================================
+
+services:
+  # --------------------------------------------------------
+  # Lightning Network Daemon (核心支付节点)
+  # --------------------------------------------------------
+  lnd:
+    image: lightninglabs/lnd:v0.18.0-beta
+    container_name: lnd
+    restart: unless-stopped
+    environment:
+      - NETWORK=${LND_NETWORK:-regtest}
+    volumes:
+      - lnd_data:/root/.lnd
+      - ./lnd/lnd.conf:/root/.lnd/lnd.conf:ro
+      - ./scripts:/scripts:ro
+    ports:
+      - "${LND_GRPC_PORT:-10009}:10009" # gRPC
+      - "${LND_REST_PORT:-8080}:8080" # REST
+    networks:
+      - daemon_net
+    healthcheck:
+      test: [ "CMD", "lncli", "getinfo" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    command: >
+      lnd --noseedbackup --bitcoin.regtest --listen=0.0.0.0:9735 --rpclisten=0.0.0.0:10009 --restlisten=0.0.0.0:8080
+
+  # --------------------------------------------------------
+  # L402 Gateway (API 网关 + 支付拦截)
+  # --------------------------------------------------------
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: gateway
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3000
+      - LND_GRPC_HOST=lnd:10009
+      - LND_MACAROON_HEX=${LND_MACAROON_HEX}
+      - LND_TLS_CERT_PATH=/lnd/tls.cert
+      - L402_SECRET_KEY=${L402_SECRET_KEY}
+      - INVOICE_PRICE_MSATS=${INVOICE_PRICE_MSATS:-1000}
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/daemon
+      - REDIS_URL=redis://${REDIS_PASSWORD:+:$REDIS_PASSWORD@}redis:6379
+    volumes:
+      - lnd_data:/lnd:ro
+    ports:
+      - "${GATEWAY_PORT:-3000}:3000"
+    networks:
+      - daemon_net
+    depends_on:
+      lnd:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # --------------------------------------------------------
+  # Fleet Observer Dashboard (Web UI)
+  # --------------------------------------------------------
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: dashboard
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - NEXT_PUBLIC_GATEWAY_URL=http://gateway:3000
+      - NEXT_PUBLIC_TELEMETRY_WS=ws://localhost:3002
+    ports:
+      - "${DASHBOARD_PORT:-3001}:3001"
+    networks:
+      - daemon_net
+    depends_on:
+      - gateway
+    command: npm run dev -- -p 3001
+
+  # --------------------------------------------------------
+  # AI Agent (Python)
+  # --------------------------------------------------------
+  agent:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    container_name: agent
+    restart: unless-stopped
+    environment:
+      - LND_GRPC_HOST=lnd:10009
+      - LND_MACAROON_HEX=${LND_MACAROON_HEX}
+      - LND_TLS_CERT_PATH=/lnd/tls.cert
+      - GATEWAY_URL=http://gateway:3000
+      - AGENT_SEED_PHRASE=${AGENT_SEED_PHRASE}
+      - BUDGET_LIMIT_SATS=${BUDGET_LIMIT_SATS:-10000}
+      - HOURLY_LIMIT_MSATS=${HOURLY_LIMIT_MSATS:-100000}
+      - LARGE_PAYMENT_THRESHOLD_MSATS=${LARGE_PAYMENT_THRESHOLD_MSATS:-50000}
+      - TELEMETRY_SECRET=${TELEMETRY_SECRET}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+    volumes:
+      - lnd_data:/lnd:ro
+      - agent_memory:/app/memory
+    ports:
+      - "${AGENT_API_PORT:-5000}:5000"
+      - "${TELEMETRY_WS_PORT:-3002}:3002"
+    networks:
+      - daemon_net
+    depends_on:
+      lnd:
+        condition: service_healthy
+      gateway:
+        condition: service_healthy
+
+  # --------------------------------------------------------
+  # PostgreSQL (元数据存储)
+  # --------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=daemon
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    networks:
+      - daemon_net
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --------------------------------------------------------
+  # Redis (Macaroon 缓存 + Session)
+  # --------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    command: >
+      redis-server ${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD} --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - daemon_net
+
+# ============================================================
+# Networks (容器间通信)
+# ============================================================
+networks:
+  daemon_net:
+    driver: bridge
+    name: daemon_network
+
+# ============================================================
+# Volumes (数据持久化)
+# ============================================================
+volumes:
+  lnd_data:
+    name: daemon_lnd_data
+  postgres_data:
+    name: daemon_postgres_data
+  redis_data:
+    name: daemon_redis_data
+  agent_memory:
+    name: daemon_agent_memory
