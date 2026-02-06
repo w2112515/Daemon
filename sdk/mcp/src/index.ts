@@ -52,3 +52,20 @@ export type {
     L402RequestContext,
     L402ErrorResponse,
 } from './types';
+
+// Transport layer (Phase 2)
+export {
+    createTransport,
+    createStdioTransport,
+    createSSETransport,
+    getRecommendedTransportType,
+    isStdioTransport,
+    isSSETransport,
+} from './transport';
+
+export type {
+    TransportType,
+    TransportFactoryConfig,
+    SSETransportConfig,
+    StdioTransportConfig,
+} from './transport';

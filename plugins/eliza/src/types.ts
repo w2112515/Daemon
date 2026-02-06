@@ -66,3 +66,59 @@ export interface L402RequestResult {
     /** Whether L402 payment was triggered */
     paidL402: boolean;
 }
+
+/**
+ * LND connection configuration
+ */
+export interface LndConfig {
+    /** LND host (default: localhost) */
+    host?: string;
+    /** LND gRPC port (default: 10009) */
+    port?: number;
+    /** TLS cert path or base64 */
+    cert?: string;
+    /** TLS cert file path (for real mode) */
+    tlsCertPath?: string;
+    /** Macaroon path or base64 (admin macaroon) */
+    macaroon?: string;
+    /** Macaroon file path (for real mode) */
+    macaroonPath?: string;
+    /** Use mock mode for testing */
+    mockMode?: boolean;
+}
+
+/**
+ * Wallet balance response
+ */
+export interface WalletBalance {
+    /** Confirmed balance in satoshis */
+    confirmedBalance: number;
+    /** Unconfirmed balance in satoshis */
+    unconfirmedBalance: number;
+    /** Total balance (confirmed + unconfirmed) */
+    totalBalance: number;
+}
+
+/**
+ * Invoice creation result
+ */
+export interface Invoice {
+    /** BOLT11 payment request */
+    paymentRequest: string;
+    /** Payment hash (r_hash) hex */
+    paymentHash: string;
+    /** Invoice expiry in seconds */
+    expiry: number;
+}
+
+/**
+ * LND node info
+ */
+export interface LndInfo {
+    /** Node public key */
+    pubkey: string;
+    /** Node alias */
+    alias: string;
+    /** Synced to chain */
+    syncedToChain: boolean;
+}

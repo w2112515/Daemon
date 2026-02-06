@@ -1,0 +1,220 @@
+// Minimal LND Lightning gRPC definitions for Daemon L402 Gateway
+// Source: https://github.com/lightningnetwork/lnd/blob/master/lnrpc/lightning.proto
+// Version: Subset for L402 Invoice operations
+
+syntax = "proto3";
+
+package lnrpc;
+
+option go_package = "github.com/lightningnetwork/lnd/lnrpc";
+
+// Lightning is the main RPC service for LND
+service Lightning {
+    // GetInfo returns general information about the lightning node
+    rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
+
+    // AddInvoice creates a new invoice for payment
+    rpc AddInvoice(Invoice) returns (AddInvoiceResponse);
+
+    // LookupInvoice retrieves the invoice status
+    rpc LookupInvoice(PaymentHash) returns (Invoice);
+
+    // DecodePayReq decodes a payment request string
+    rpc DecodePayReq(PayReqString) returns (PayReq);
+}
+
+// GetInfoRequest is an empty request
+message GetInfoRequest {}
+
+// GetInfoResponse contains basic node information
+message GetInfoResponse {
+    // The identity pubkey of the node
+    string identity_pubkey = 1;
+
+    // Alias of the node
+    string alias = 2;
+
+    // Number of active channels
+    uint32 num_active_channels = 3;
+
+    // Number of inactive channels
+    uint32 num_inactive_channels = 4;
+
+    // Number of peers connected
+    uint32 num_peers = 5;
+
+    // Block height of the best known block
+    uint32 block_height = 6;
+
+    // Block hash of the best known block
+    string block_hash = 8;
+
+    // Whether the wallet is synced to chain
+    bool synced_to_chain = 9;
+
+    // Whether the node is synced to graph
+    bool synced_to_graph = 18;
+
+    // Current Bitcoin network (mainnet, testnet, regtest, signet)
+    repeated Chain chains = 16;
+
+    // LND version
+    string version = 14;
+}
+
+// Chain represents the network chain
+message Chain {
+    string chain = 1;
+    string network = 2;
+}
+
+// Invoice represents a lightning invoice
+message Invoice {
+    // Optional memo to attach along with the invoice
+    string memo = 1;
+
+    // The preimage used to generate payment_hash (optional on creation)
+    bytes r_preimage = 3;
+
+    // The payment hash (derived from r_preimage if not set)
+    bytes r_hash = 4;
+
+    // The value of this invoice in satoshis (deprecated, use value_msat)
+    int64 value = 5;
+
+    // The value of this invoice in millisatoshis
+    int64 value_msat = 23;
+
+    // Whether this invoice has been fulfilled
+    bool settled = 6;
+
+    // Creation timestamp
+    int64 creation_date = 7;
+
+    // Settlement timestamp (if settled)
+    int64 settle_date = 8;
+
+    // A BOLT 11 payment request string
+    string payment_request = 9;
+
+    // Hash of the description
+    bytes description_hash = 10;
+
+    // Payment request expiry time in seconds (default: 3600)
+    int64 expiry = 11;
+
+    // Absolute expiry timestamp
+    int64 expiry_seconds = 12 [deprecated = true];
+
+    // Fallback on-chain address
+    string fallback_addr = 13;
+
+    // CLTV expiry delta
+    uint64 cltv_expiry = 14;
+
+    // Route hints for private channels
+    repeated RouteHint route_hints = 15;
+
+    // Whether this is a private invoice
+    bool private = 16;
+
+    // Add index
+    uint64 add_index = 17;
+
+    // Settle index
+    uint64 settle_index = 18;
+
+    // Amount paid in msat (when settled)
+    int64 amt_paid_msat = 20;
+
+    // Invoice state
+    InvoiceState state = 21;
+
+    // Preimage hash type
+    InvoiceHtlcModifier htlc_modifier = 24;
+
+    // AMP invoice flag
+    bool is_amp = 25;
+
+    // Payment address (for modern invoices)
+    bytes payment_addr = 26;
+}
+
+// InvoiceState represents the state of an invoice
+enum InvoiceState {
+    OPEN = 0;
+    SETTLED = 1;
+    CANCELED = 2;
+    ACCEPTED = 3;
+}
+
+// Route hint for private channels
+message RouteHint {
+    repeated HopHint hop_hints = 1;
+}
+
+// Hop hint for routing
+message HopHint {
+    string node_id = 1;
+    uint64 chan_id = 2;
+    uint32 fee_base_msat = 3;
+    uint32 fee_proportional_millionths = 4;
+    uint32 cltv_expiry_delta = 5;
+}
+
+// AddInvoiceResponse is returned when creating an invoice
+message AddInvoiceResponse {
+    // The payment hash
+    bytes r_hash = 1;
+
+    // The BOLT 11 payment request
+    string payment_request = 2;
+
+    // The index at which the invoice was added
+    uint64 add_index = 3;
+
+    // The payment address for this invoice
+    bytes payment_addr = 4;
+}
+
+// PaymentHash is used to lookup invoices
+message PaymentHash {
+    // The payment hash
+    bytes r_hash = 1;
+
+    // Deprecated string version
+    string r_hash_str = 2;
+}
+
+// PayReqString used to decode payment requests
+message PayReqString {
+    // The payment request string to decode
+    string pay_req = 1;
+}
+
+// PayReq contains decoded payment request info
+message PayReq {
+    string destination = 1;
+    string payment_hash = 2;
+    int64 num_satoshis = 3;
+    int64 timestamp = 4;
+    int64 expiry = 5;
+    string description = 6;
+    bytes description_hash = 7;
+    string fallback_addr = 8;
+    int64 cltv_expiry = 9;
+    repeated RouteHint route_hints = 10;
+    bytes payment_addr = 11;
+    int64 num_msat = 12;
+    map<uint64, Feature> features = 13;
+}
+
+// Feature flag
+message Feature {
+    string name = 2;
+    bool is_required = 3;
+    bool is_known = 4;
+}
+
+// Placeholder for HTLC modifier (not used in basic invoice operations)
+message InvoiceHtlcModifier {}

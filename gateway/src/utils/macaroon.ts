@@ -2,9 +2,10 @@
  * Macaroon Service for L402 Protocol
  * 
  * @description Core module for minting and verifying L402 macaroons
- * @trace Vol.2 S-P0-03, Vol.1 §2.2
+ * @trace Vol.2 S-P0-03, Vol.1 §2.2, Task-P2-02
  * @constraint D-SEC-01: Root Key 不硬编码
  * @constraint D-GW-02: Macaroon 可铸造并验证
+ * @constraint D-P2-02b: 支持 Root Key 轮换，旧 token 在 TTL 内仍可验证
  */
 
 import crypto from 'crypto';
@@ -15,6 +16,7 @@ import {
     MacaroonIdentifier,
     MACAROON_CONSTANTS,
 } from '../types/macaroon';
+import { getRootKeyManager, RootKeyManager } from './root_key_manager';
 
 /** HMAC-SHA256 helper */
 function hmacSha256(key: Buffer, data: Buffer): Buffer {
@@ -58,28 +60,39 @@ export interface SerializedMacaroon {
     identifier: string;    // base64
     caveats: string[];     // caveat predicates
     signature: string;     // hex
+    keyId?: string;        // Key ID for key rotation (Task-P2-02)
 }
 
 export class MacaroonService {
     private readonly rootKey: Buffer;
     private readonly location: string;
+    private readonly keyManager: RootKeyManager | null;
 
     /**
      * @param rootKeyHex - 32-byte hex root key (from env), or auto-generate
      * @param location - Macaroon location (e.g., 'daemon.io')
+     * @param useKeyManager - 是否使用 RootKeyManager (Task-P2-02)
      */
-    constructor(rootKeyHex?: string, location = 'daemon.io') {
-        if (rootKeyHex) {
+    constructor(rootKeyHex?: string, location = 'daemon.io', useKeyManager = true) {
+        this.location = location;
+
+        if (useKeyManager) {
+            // 使用 RootKeyManager (支持 Key 轮换)
+            this.keyManager = getRootKeyManager();
+            this.rootKey = Buffer.from(this.keyManager.getCurrentKey(), 'hex');
+        } else if (rootKeyHex) {
+            // 传统模式: 固定 Key
             if (rootKeyHex.length !== 64) {
                 throw new Error('Root key must be 32 bytes (64 hex characters)');
             }
             this.rootKey = Buffer.from(rootKeyHex, 'hex');
+            this.keyManager = null;
         } else {
             // Auto-generate for development (NOT for production)
             this.rootKey = crypto.randomBytes(32);
+            this.keyManager = null;
             console.warn('[MacaroonService] Auto-generated root key (dev mode)');
         }
-        this.location = location;
     }
 
     /**
@@ -130,12 +143,13 @@ export class MacaroonService {
             sig = hmacSha256(sig, Buffer.from(caveat, 'utf8'));
         }
 
-        // Serialize macaroon
+        // Serialize macaroon (包含 keyId 用于轮换验证)
         const macaroon: SerializedMacaroon = {
             location: this.location,
             identifier: identifierBuf.toString('base64'),
             caveats: allCaveats,
             signature: sig.toString('hex'),
+            keyId: this.keyManager?.getCurrentKeyId(),
         };
 
         return Buffer.from(JSON.stringify(macaroon)).toString('base64');
@@ -181,8 +195,27 @@ export class MacaroonService {
                 };
             }
 
+            // 获取验证用 Key (支持轮换)
+            let verifyKey: Buffer;
+            if (this.keyManager && macaroon.keyId) {
+                // 使用 keyId 查找对应的 Key
+                const foundKey = this.keyManager.findValidKey(Date.now(), macaroon.keyId);
+                if (!foundKey) {
+                    return {
+                        valid: false,
+                        caveats: [],
+                        error: 'Key not found or expired',
+                        paymentHash: identifier.paymentHash,
+                    };
+                }
+                verifyKey = Buffer.from(foundKey, 'hex');
+            } else {
+                // 传统模式或无 keyId: 使用当前 Key
+                verifyKey = this.rootKey;
+            }
+
             // Recompute signature
-            let sig = hmacSha256(this.rootKey, identifierBuf);
+            let sig = hmacSha256(verifyKey, identifierBuf);
             for (const caveat of macaroon.caveats) {
                 sig = hmacSha256(sig, Buffer.from(caveat, 'utf8'));
             }
@@ -275,11 +308,15 @@ let defaultInstance: MacaroonService | null = null;
 
 export function getMacaroonService(): MacaroonService {
     if (!defaultInstance) {
-        const rootKey = process.env.L402_SECRET_KEY;
-        if (!rootKey) {
-            console.warn('[MacaroonService] L402_SECRET_KEY not set, using auto-generated key');
-        }
-        defaultInstance = new MacaroonService(rootKey);
+        // 使用 RootKeyManager (支持 Key 轮换)
+        defaultInstance = new MacaroonService(undefined, 'daemon.io', true);
     }
     return defaultInstance;
+}
+
+/**
+ * 重置单例 (用于测试)
+ */
+export function resetMacaroonService(): void {
+    defaultInstance = null;
 }

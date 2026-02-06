@@ -1,7 +1,7 @@
 /**
  * Gateway Main Application - L402 Payment Gateway
  * 
- * @trace Vol.2 S-UI-08, Task-25
+ * @trace Vol.2 S-UI-08, Task-25, Task-P2-01, Task-P2-02
  * @description 主应用入口，集成 L402 中间件和遥测 API
  */
 
@@ -12,6 +12,9 @@ import { l402Middleware } from './middlewares/l402';
 import { replayProtectionMiddleware } from './middlewares/replay';
 import { allowlistMiddleware } from './middlewares/allowlist';
 import { circuitBreakerMiddleware, circuitStatusHandler } from './middlewares/circuit';
+import { rateLimitMiddleware } from './middlewares/ratelimit';
+import { getRootKeyManager } from './utils/root_key_manager';
+import { getMockPreimage } from './controllers/lnd';
 
 
 /** 创建 Gateway 应用 */
@@ -78,13 +81,72 @@ export function createApp(): Express {
     app.get('/api/circuit-status', circuitStatusHandler);
 
     // ===================
+    // Mock Payment (dev/demo only)
+    // ===================
+    if (process.env.NODE_ENV !== 'production') {
+        app.post('/api/mock-pay', (req: Request, res: Response) => {
+            const { paymentHash } = req.body as { paymentHash?: string };
+            if (!paymentHash) {
+                res.status(400).json({ error: 'paymentHash required' });
+                return;
+            }
+            const preimage = getMockPreimage(paymentHash);
+            if (!preimage) {
+                res.status(404).json({ error: 'Invoice not found' });
+                return;
+            }
+            res.status(200).json({ preimage, paymentHash });
+        });
+    }
+
+    // ===================
+    // Admin Routes (Task-P2-02)
+    // ===================
+
+    /** Root Key 轮换 API */
+    app.post('/api/admin/rotate-key', async (_req: Request, res: Response) => {
+        // TODO: 添加管理员认证
+        try {
+            const keyManager = getRootKeyManager();
+            const newKeyId = await keyManager.rotateRootKey();
+            const status = keyManager.getStatus();
+
+            res.status(200).json({
+                success: true,
+                newKeyId,
+                previousKeysCount: status.previousKeysCount,
+                nextExpiry: status.nextExpiry ? new Date(status.nextExpiry).toISOString() : null,
+            });
+        } catch (error) {
+            res.status(500).json({
+                error: 'Key rotation failed',
+                message: error instanceof Error ? error.message : String(error),
+            });
+        }
+    });
+
+    /** Root Key 状态 API */
+    app.get('/api/admin/key-status', (_req: Request, res: Response) => {
+        const keyManager = getRootKeyManager();
+        const status = keyManager.getStatus();
+
+        res.status(200).json({
+            currentKeyId: status.currentKeyId,
+            currentKeyAgeMs: status.currentKeyAge,
+            previousKeysCount: status.previousKeysCount,
+            nextExpiry: status.nextExpiry ? new Date(status.nextExpiry).toISOString() : null,
+        });
+    });
+
+    // ===================
     // L402 Protected Routes
     // ===================
 
-    // Hardening 中间件 (Phase 0.5, Task-I-01)
+    // Hardening 中间件 (Phase 0.5, Task-I-01, Task-P2-01)
     const replayProtection = replayProtectionMiddleware();
     const allowlist = allowlistMiddleware({ skipPaths: ['/health', '/api', '/api/telemetry'] });
     const circuitBreaker = circuitBreakerMiddleware({ skipPaths: ['/health', '/api/circuit-status'] });
+    const rateLimit = rateLimitMiddleware({ skipPaths: ['/health', '/api', '/api/telemetry', '/api/admin'] });
 
     // 创建 L402 中间件实例（配置固定定价）
     const l402 = l402Middleware({
@@ -96,8 +158,8 @@ export function createApp(): Express {
         tokenExpirySeconds: 3600,
     });
 
-    /** 示例受保护端点 - 需要 L402 支付 + Hardening */
-    app.get('/api/compute', circuitBreaker, l402, replayProtection, allowlist, (_req: Request, res: Response) => {
+    /** 示例受保护端点 - 需要 L402 支付 + Hardening + Rate Limit */
+    app.get('/api/compute', rateLimit, circuitBreaker, l402, replayProtection, allowlist, (_req: Request, res: Response) => {
         res.status(200).json({
             result: 'Hello from L402 protected endpoint!',
             timestamp: new Date().toISOString(),
@@ -105,7 +167,7 @@ export function createApp(): Express {
         });
     });
 
-    app.post('/api/compute', circuitBreaker, l402, replayProtection, allowlist, (req: Request, res: Response) => {
+    app.post('/api/compute', rateLimit, circuitBreaker, l402, replayProtection, allowlist, (req: Request, res: Response) => {
         const { prompt } = req.body as { prompt?: string };
 
         res.status(200).json({

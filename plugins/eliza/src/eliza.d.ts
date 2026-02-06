@@ -38,7 +38,24 @@ export interface ActionExample {
 export interface Plugin {
     name: string;
     description?: string;
+    init?: (runtime: ElizaRuntime) => Promise<void>;
     actions?: Action[];
-    services?: unknown[];
+    services?: Service[];
     events?: Record<string, unknown[]>;
+}
+
+export interface ElizaRuntime {
+    getSetting(key: string): unknown;
+    logger: {
+        info(message: string): void;
+        warn(message: string): void;
+        error(message: string): void;
+    };
+}
+
+export interface Service {
+    name: string;
+    description?: string;
+    connect?(): Promise<void>;
+    disconnect?(): Promise<void>;
 }

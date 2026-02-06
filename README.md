@@ -1,168 +1,195 @@
 ﻿# Daemon
 
-> **让 AI 像调用 API 一样完成支付 — 无 Key、无账号、无月结**
+> **AI agents pay for any API with Bitcoin Lightning — no keys, no accounts, no monthly bills.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Bitcoin](https://img.shields.io/badge/Bitcoin-Lightning-orange.svg)](https://lightning.network/)
 [![L402](https://img.shields.io/badge/Protocol-L402-purple.svg)](https://docs.lightning.engineering/the-lightning-network/l402)
+[![Track](https://img.shields.io/badge/Track-Bitcoin%20%2B%20Stablecoins-blue.svg)](#)
 
 ---
 
-## Core 核心能力
+## The Problem
 
-### Zero-Config Access
-无需注册账号、无需申请 API Key、无需处理月结账单。
-Agent 直接支付，服务直接响应。
+AI agents are the fastest-growing class of internet users — but they can't pay for anything. No bank account, no credit card, no KYC. Every API requires a human to sign up, generate a key, and manage billing.
 
-### Pay-Per-Call
-按调用付费，粒度低至 1 satoshi。
-告别订阅制，只为实际使用付费。
+## The Solution
 
----
+Daemon implements the **L402 protocol** to turn HTTP `402 Payment Required` into a real payment flow. An agent sends satoshis over Lightning, and gets data back. Zero config.
 
-## Controls 安全机制
-
-| 机制 | 说明 |
-|------|------|
-| **Budget Rails** | 人类设定预算上限，Agent 无法超支 |
-| **Allowlist** | 白名单控制可访问服务 |
-| **Audit Trail** | 不可篡改的支付审计日志 |
-| **Circuit Breakers** | 异常检测与自动熔断 |
-
-> 💡 **设计原则**: Zero-Config for developers; policy-driven controls for operators.
+```
+Agent Request  ──→  HTTP 402 + Invoice  ──→  Lightning Payment  ──→  HTTP 200 OK
+                    "Pay 1 sat"               ~50ms settlement       "Here's your data"
+```
 
 ---
 
-## Quick Start
+## Live Demo
 
 ```bash
-# 克隆并启动
+# Clone and run the interactive demo
 git clone https://github.com/anthropics/daemon && cd daemon
-make demo
+cd gateway && npm install && npm run dev
 
-# 观察 L402 握手
-# Agent 请求 → 402 Payment Required → Pay 5 sats → 200 OK
+# In another terminal — watch the full L402 handshake
+.\scripts\demo-l402.ps1          # Windows
 ```
 
-```powershell
-# Windows (PowerShell)
-git clone https://github.com/anthropics/daemon && cd daemon
-.\scripts\demo.ps1
-```
+The demo shows the complete flow: **Request → 402 → Pay → 200** in under 3 seconds.
 
-**Time-to-Hello-World**: < 5 分钟
+<!-- TODO: Add link to 1-min demo video -->
 
 ---
 
-## Extensions 可选增强
+## Monetize Any API in One Command
 
-<details>
-<summary>展开查看可选功能</summary>
+**For API providers:** Daemon's L402 Proxy wraps any existing HTTP API with pay-per-call micropayments — no code changes required.
 
-### Settlement Assurance
-采用 Bitcoin/Lightning 进行协议层结算，降低对单一中心化结算方的依赖。
+```bash
+# Turn any API into a paid API
+UPSTREAM_URL=https://your-api.com  npx @daemon/l402-proxy
 
-> ⚠️ **合规声明**: 不用于规避法律义务；在适用场景下支持合规与风控集成。
+# That's it. Agents now pay 1 sat per call to access your API.
+# curl http://localhost:8402/your-endpoint  →  402 Payment Required
+```
 
-### Yield Module (默认关闭)
-Agent 闲置资金可选择参与闪电网络路由，赚取路由费。
+**No Stripe. No billing dashboard. No user accounts to manage.** Just point the proxy at your API and start earning sats.
 
-| 属性 | 说明 |
-|------|------|
-| **收益来源** | Lightning Network 路由费 (技术机制，非投资产品) |
-| **示例区间** | 0.01% - 0.1% 年化 (历史观察，仅作示例) |
-| **保证性** | ❌ **不保证收益** |
-| **默认状态** | **关闭** (需显式开启) |
+| You are... | How you use Daemon |
+|---|---|
+| **API provider** | Deploy L402 Proxy in front of your API → earn sats per call |
+| **Agent developer** | Use Python/TS SDK → your agent auto-pays on 402 |
+| **Framework author** | Integrate Eliza Plugin or MCP SDK → L402 built into your stack |
 
-> ⚠️ **可撤回条款**: 历史观察区间仅作示例，不构成预期或承诺；区间可能随时间调整或移除。
->
-> ⚠️ **这不是投资产品**。如果您的目标是投资收益，请选择其他金融工具。
+---
 
-### Propose+Approve (Phase 2+)
-Agent 可提议新服务，人类审批后生效。
+## Why Bitcoin Lightning?
 
-</details>
+| | Daemon (L402 + Lightning) | x402 (Coinbase) | Traditional API Keys |
+|---|---|---|---|
+| **Identity required** | None | Coinbase account | Email + KYC |
+| **Settlement** | ~50ms (Lightning) | Minutes (on-chain) | 30-day invoice |
+| **Minimum payment** | 1 satoshi (~$0.001) | Gas fees apply | Monthly minimum |
+| **Machine-native** | Yes — no human in the loop | Custodial wallet | Human signs up |
+| **Censorship risk** | Permissionless | Coinbase can freeze | Provider can revoke |
+
+**L402 is the HTTP-native payment protocol.** It uses the `402 Payment Required` status code that HTTP reserved since 1997 — finally giving it a real implementation with Bitcoin Lightning.
+
+---
+
+## How It Works
+
+```
+┌──────────┐         ┌───────────────┐         ┌──────────┐
+│ AI Agent │ ──(1)──→│ L402 Gateway  │──(2)───→│ Service  │
+│          │         │               │         │          │
+│          │←─(3)────│ 402 + Invoice │         │          │
+│          │         │ + Macaroon    │         │          │
+│          │         └───────────────┘         │          │
+│          │                                    │          │
+│          │──(4)──→ Lightning Network ─────→   │          │
+│          │←─(5)──  Preimage (proof)           │          │
+│          │                                    │          │
+│          │──(6)──→ L402 Token ──────────────→│          │
+│          │←─(7)────────────── 200 OK ────────│          │
+└──────────┘                                    └──────────┘
+```
+
+1. Agent requests a protected endpoint
+2. Gateway returns `402` with a Lightning invoice and a Macaroon
+3. Agent pays the invoice (~1 sat, ~50ms)
+4. Agent gets a preimage (cryptographic proof of payment)
+5. Agent constructs an L402 token (Macaroon + Preimage)
+6. Gateway verifies the token and serves the response
+
+---
+
+## Safety Controls
+
+Daemon is designed for **human-supervised autonomy** — agents act freely within guardrails set by operators.
+
+| Control | Description |
+|---------|-------------|
+| **Budget Rails** | Hard spending caps per agent. Agents cannot exceed the budget. |
+| **Allowlist** | Whitelist of permitted services. Unknown endpoints are blocked. |
+| **Circuit Breakers** | Auto-halt on anomalies (consecutive failures, unusual patterns). |
+| **Replay Protection** | Each payment proof is single-use. Replay attacks are rejected. |
+| **Rate Limiting** | Per-client sliding window with Redis-backed distributed state. |
+| **Root Key Rotation** | Macaroon signing keys rotate automatically; old tokens honored during grace period. |
 
 ---
 
 ## Architecture
 
 ```
-+------------------------------------------------------------------+
-|                       L402 PAYMENT FLOW                          |
-+------------------------------------------------------------------+
-|                                                                  |
-|  [AI Agent]  ------>  [L402 Gateway]  ------>  [Service]         |
-|       |                     |                      |             |
-|       | 1. Request          | 2. 402 + Invoice     |             |
-|       v                     |                      |             |
-|  [LND Wallet] ========>  [Lightning Network]                     |
-|       |                     |                      |             |
-|       | 4. Preimage         |                      |             |
-|       v                     |                      |             |
-|  3. Pay via Lightning       |                      |             |
-|                                                                  |
-|  5. Request + L402 Token -------------------------------->       |
-|  6. Verify & Serve                                               |
-+------------------------------------------------------------------+
+daemon/
+├─ gateway/            # L402 Payment Gateway (Express + TypeScript)
+│  ├─ middlewares/     # L402, Circuit Breaker, Replay, Rate Limit, Allowlist
+│  ├─ controllers/     # LND invoice generation
+│  └─ utils/           # Macaroon service, Root Key rotation, Redis
+├─ agent/              # AI Agent client (Python)
+│  ├─ client/          # L402 HTTP client (auto-pay on 402)
+│  └─ wallet/          # LND wallet wrapper + rate limiter + alerts
+├─ sdk/
+│  ├─ python/          # Python SDK — pip install daemon-l402
+│  ├─ ts/              # TypeScript SDK — npm install @daemon/sdk
+│  └─ mcp/             # Model Context Protocol SDK
+├─ plugins/
+│  └─ eliza/           # ElizaOS plugin for agent frameworks
+├─ proxy/              # Drop-in HTTP proxy (zero-code L402)
+├─ dashboard/          # Fleet Observer (Next.js real-time UI)
+└─ docker-compose.yml  # Full stack: LND + Bitcoin + Gateway + Agent + DB
 ```
-
----
-
-## For Different Audiences
-
-| 你是... | 关注点 |
-|--------|--------|
-| **黑客松评委** | BTCFi Agent Economy — AI 原生支付基础设施 |
-| **开发者** | Zero-Config + Pay-Per-Call — 无需 API Key 即可接入 |
-| **企业用户** | Budget Rails + Audit Trail — 安全可控的 Agent 支付 |
-
----
 
 ## Tech Stack
 
-| Layer | Technology | Purpose |
-|-------|------------|---------|
-| L1 | Bitcoin (Signet/Mainnet) | 结算层 |
-| L2 | LND (Lightning) | 支付层 |
-| L3 | L402 Protocol | 认证支付协议 |
-| L4 | Python/LangChain | Agent 逻辑 |
-| L5 | FastAPI | API 网关 |
-| L6 | React/Next.js | Fleet Observer UI |
+| Layer | Technology | Role |
+|-------|------------|------|
+| Settlement | Bitcoin (Regtest / Signet / Mainnet) | Base layer |
+| Payment | LND (Lightning Network Daemon) | Instant micropayments |
+| Protocol | L402 (Macaroon + Lightning) | Auth-payment fusion |
+| Gateway | Express + TypeScript | API gateway with L402 middleware |
+| Agent | Python + httpx | Auto-paying HTTP client |
+| Dashboard | Next.js + React | Real-time fleet monitoring |
+| Infra | Docker Compose, PostgreSQL, Redis | Production-ready stack |
 
 ---
 
-## Project Structure
+## SDK — 3 Lines to Integrate
 
-```
-daemon/
-├─ agent/              # AI Agent (买方)
-│  ├─ tools/           # LangChain L402 工具
-│  ├─ wallet/          # LND 钱包封装
-│  └─ dashboard/       # Yield Dashboard
-├─ gateway/            # L402 Server (卖方)
-│  ├─ middlewares/     # L402 拦截器
-│  └─ routes/          # API 路由
-├─ dashboard/          # Web Fleet Observer
-└─ tests/              # 测试套件
+**Python**
+```python
+from daemon_l402 import L402Client
+
+async with L402Client(lnd_client) as client:
+    response = await client.get("https://api.example.com/data")  # auto-pays on 402
 ```
 
----
+**TypeScript**
+```typescript
+import { L402Client } from '@daemon/sdk';
 
-## License
-
-MIT License - 详见 [LICENSE](./LICENSE)
+const client = new L402Client({ lndConnect: process.env.LND_CONNECT });
+const res = await client.fetch('https://api.example.com/data'); // auto-pays on 402
+```
 
 ---
 
 ## Links
 
-- **L402 Protocol**: [Lightning Labs L402](https://docs.lightning.engineering/the-lightning-network/l402)
-- **LND**: [Lightning Network Daemon](https://github.com/lightningnetwork/lnd)
+- [L402 Protocol Spec](https://docs.lightning.engineering/the-lightning-network/l402) — Lightning Labs
+- [LND](https://github.com/lightningnetwork/lnd) — Lightning Network Daemon
+- [HTTP 402](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/402) — The status code reserved for digital payments since 1997
+
+---
+
+## License
+
+MIT
 
 ---
 
 <p align="center">
-  <b>Daemon — The Payment Rail for Machine Economy</b><br>
-  <i>Built with Lightning for BTCFi Hackathon</i>
+  <b>Daemon — The Payment Rail for the Machine Economy</b><br>
+  <i>Built on Bitcoin for <a href="#">Build on Bitcoin Hackathon</a> (Yale Blockchain Club)</i>
 </p>

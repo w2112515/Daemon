@@ -218,31 +218,31 @@ describe('L402 Middleware', () => {
             expect(invoice.paymentHash).toMatch(/^[0-9a-f]+$/);
         });
 
-        it('mockMacaroonMinter should create base64 macaroon', () => {
+        it('mockMacaroonMinter should create base64 macaroon', async () => {
             const minter = mockMacaroonMinter('secret');
-            const macaroon = minter('paymenthash123');
+            const macaroon = await minter('paymenthash123');
 
             expect(typeof macaroon).toBe('string');
             expect(() => Buffer.from(macaroon, 'base64')).not.toThrow();
         });
 
-        it('mockCredentialVerifier should validate correct credentials', () => {
+        it('mockCredentialVerifier should validate correct credentials', async () => {
             const verifier = mockCredentialVerifier('secret');
             const paymentHash = 'a'.repeat(64);
             const macaroon = Buffer.from(`${paymentHash}:secret`).toString('base64');
             const preimage = 'b'.repeat(64);
 
-            const result = verifier(macaroon, preimage);
+            const result = await verifier(macaroon, preimage);
 
             expect(result.valid).toBe(true);
             expect(result.paymentHash).toBe(paymentHash);
         });
 
-        it('mockCredentialVerifier should reject invalid preimage', () => {
+        it('mockCredentialVerifier should reject invalid preimage', async () => {
             const verifier = mockCredentialVerifier('secret');
             const macaroon = Buffer.from('hash:secret').toString('base64');
 
-            const result = verifier(macaroon, 'short');
+            const result = await verifier(macaroon, 'short');
 
             expect(result.valid).toBe(false);
         });

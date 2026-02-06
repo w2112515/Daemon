@@ -33,10 +33,23 @@ export interface AddInvoiceResponse {
     payment_addr: Buffer;
 }
 
+/** GetInfo 响应 */
+export interface GetInfoResponse {
+    identity_pubkey: string;
+    alias: string;
+    num_active_channels: number;
+    num_peers: number;
+    block_height: number;
+    synced_to_chain: boolean;
+    version: string;
+    chains: Array<{ chain: string; network: string }>;
+}
+
 /** LND RPC 客户端接口 */
 export interface LndRpcClient {
     addInvoice(request: AddInvoiceRequest): Promise<AddInvoiceResponse>;
     lookupInvoice(rHash: Buffer): Promise<unknown>;
+    getInfo(): Promise<GetInfoResponse>;
     close(): void;
 }
 
@@ -116,6 +129,14 @@ export async function createLndClient(config: LndGrpcConfig): Promise<LndRpcClie
         lookupInvoice: (rHash: Buffer) =>
             new Promise((resolve, reject) => {
                 client.LookupInvoice({ r_hash: rHash }, (err: Error | null, response: unknown) => {
+                    if (err) reject(err);
+                    else resolve(response);
+                });
+            }),
+
+        getInfo: () =>
+            new Promise<GetInfoResponse>((resolve, reject) => {
+                client.GetInfo({}, (err: Error | null, response: GetInfoResponse) => {
                     if (err) reject(err);
                     else resolve(response);
                 });

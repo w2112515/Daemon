@@ -7,6 +7,9 @@
 
 import crypto from 'crypto';
 
+/** Mock preimage 存储 (dev/demo only) */
+const mockPreimageStore = new Map<string, string>();
+
 /** Invoice 创建结果 */
 export interface InvoiceResult {
     paymentRequest: string;     // bolt11 invoice
@@ -66,6 +69,9 @@ export async function createInvoice(
 
     const expiresAt = Math.floor(Date.now() / 1000) + expirySeconds;
 
+    // 存储 preimage 供 mock 支付查询
+    mockPreimageStore.set(paymentHash, preimage.toString('hex'));
+
     console.log(`[LND] Mock Invoice created: ${paymentHash.substring(0, 16)}... ${amountMsats}msats`);
 
     return {
@@ -74,6 +80,16 @@ export async function createInvoice(
         amountMsats,
         expiresAt,
     };
+}
+
+/**
+ * 查询 Mock preimage (dev/demo only)
+ * 
+ * @param paymentHash - 32-byte hex payment hash
+ * @returns preimage hex or null
+ */
+export function getMockPreimage(paymentHash: string): string | null {
+    return mockPreimageStore.get(paymentHash) ?? null;
 }
 
 /**

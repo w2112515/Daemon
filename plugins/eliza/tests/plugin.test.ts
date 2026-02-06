@@ -1,8 +1,12 @@
 /**
  * Tests for Eliza L402 Plugin
  * 
- * @trace Task-P1-07
+ * @trace Task-P1-07, Task-P1-11
  * @constraint D-ECO-04: Plugin loadable
+ * @constraint D-ECO-04a: init(runtime) hook exists
+ * @constraint D-ECO-04b: receivePayment Action registered
+ * @constraint D-ECO-04c: getBalance Action registered
+ * @constraint D-ECO-04d: LndConnectionService exported
  * @constraint D-ECO-05: payL402Invoice action works
  */
 
@@ -10,6 +14,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
     elizaL402Plugin,
     configureL402Plugin,
+    LndConnectionService,
 } from '../src/index';
 
 describe('elizaL402Plugin', () => {
@@ -22,8 +27,8 @@ describe('elizaL402Plugin', () => {
             expect(elizaL402Plugin.description).toContain('L402');
         });
 
-        it('should export two actions', () => {
-            expect(elizaL402Plugin.actions).toHaveLength(2);
+        it('should export four actions (D-ECO-04a/b/c)', () => {
+            expect(elizaL402Plugin.actions).toHaveLength(4);
         });
 
         it('should have PAY_L402_INVOICE action', () => {
@@ -40,6 +45,33 @@ describe('elizaL402Plugin', () => {
             );
             expect(action).toBeDefined();
             expect(action?.description).toContain('L402');
+        });
+
+        it('should have RECEIVE_PAYMENT action (D-ECO-04b)', () => {
+            const action = elizaL402Plugin.actions?.find(
+                (a) => a.name === 'RECEIVE_PAYMENT'
+            );
+            expect(action).toBeDefined();
+            expect(action?.description).toContain('receive');
+        });
+
+        it('should have GET_BALANCE action (D-ECO-04c)', () => {
+            const action = elizaL402Plugin.actions?.find(
+                (a) => a.name === 'GET_BALANCE'
+            );
+            expect(action).toBeDefined();
+            expect(action?.description).toContain('balance');
+        });
+
+        it('should have init hook (D-ECO-04a)', () => {
+            expect(elizaL402Plugin.init).toBeDefined();
+            expect(typeof elizaL402Plugin.init).toBe('function');
+        });
+
+        it('should export LndConnectionService (D-ECO-04d)', () => {
+            expect(LndConnectionService).toBeDefined();
+            const service = new LndConnectionService();
+            expect(service.name).toBe('LndConnectionService');
         });
     });
 
