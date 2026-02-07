@@ -72,7 +72,7 @@ Write-Host "      GET $GatewayUrl/api/compute" -ForegroundColor White
 
 Pause-For 1
 
-$step1Raw = curl.exe -s -D - http://localhost:3333/api/compute 2>&1
+$step1Raw = curl.exe -s -D - "$GatewayUrl/api/compute" 2>&1
 $step1Text = $step1Raw -join "`n"
 
 # Extract HTTP status
